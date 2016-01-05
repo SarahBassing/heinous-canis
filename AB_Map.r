@@ -31,6 +31,7 @@
   graze.allots <- readOGR(dsn="C:/Sarah B/Thesis POM/Arc_Layers/Grazing_Allotments", layer="GrazAllots_in_WMUrequested_2015May14")
   township <- readOGR(dsn="C:/Sarah B/Thesis POM/Arc_Layers/AESRD Original Layers/Hydro_ATS_ProvBoundary/ATS_v4.1_Geo_shp/ATS41_NewFormat/geographic shapefile", layer="ATSv41PolygonsTownshipIndex")
   section <- readOGR(dsn="C:/Sarah B/Thesis POM/Arc_Layers/Hunter Surveys", layer="ATS_PolygonSection_Clip")
+  DEM <- stack("C:/Sarah B/Thesis POM/Arc_Layers/AESRD Original Layers/DEM/dem_10m.img")  # stack() part of raster package to read in .img files
   
   
   # Check out the original shapefile data- feature type, fields, projection, etc.
@@ -50,25 +51,36 @@
   
   # Subset the full genetic data so it's just ID and location data
   locs12 <- subset(Geno.2012, select=c("Wolf_ID", "Final_Age", "Sample_Site", "UTM_E", "UTM_N"))
-  head(locs12)
+  locs13 <- subset(Geno.2013, select=c("Wolf_ID", "Final_Age", "Sample_Site", "UTM_E", "UTM_N"))
+  locs14 <- subset(Geno.2014, select=c("Wolf_ID", "Final_Age", "Sample_Site", "UTM_E", "UTM_N"))
+  
+  head(locs12)    # Double check it looks right
   
   # Making DNA data spatial
   coordinates(locs12) <- c("UTM_E", "UTM_N")
+  coordinates(locs13) <- c("UTM_E", "UTM_N")
+  coordinates(locs14) <- c("UTM_E", "UTM_N")
   
   # Define spatial projection of DNA data
   sa.geo <- CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
   proj4string(locs12) <- sa.geo
+  proj4string(locs13) <- sa.geo
+  proj4string(locs14) <- sa.geo
+  
   print(proj4string(locs12))    # Double check it's in the right projection
   
   
   # Subset observations by age class (pup vs. adult samples)
   P12 <- locs12[which(locs12$Final_Age=="P"),]; A12 <- locs12[which(locs12$Final_Age=="A"),]
+  P13 <- locs13[which(locs13$Final_Age=="P"),]; A13 <- locs13[which(locs13$Final_Age=="A"),]
+  P14 <- locs14[which(locs14$Final_Age=="P"),]; A14 <- locs14[which(locs14$Final_Age=="A"),]
 
   
   # Read in hunter survey data
   source("C:/Sarah B/Thesis POM/Scripts/Hunter_Surveys.R")
   # trying to spCbind LSD locations to section layer but FML I can't figure this out and I don't think it's gonna work
-  #hs12.match <- match(sec$SEC, HS.12$Section)
+  hs12.match <- match(section$SEC, HS.12$Section)
+  hs12.over <- over(HS.12$Section, section$SEC, returnList=TRUE)
   
   
   Hunt12 <- read.csv("C:/Sarah B/Thesis POM/Data/Hunter_Surveys/HS_2012_latlong.csv")
@@ -88,6 +100,8 @@
   
 
   #  Project all the layers
+  saproj <- "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"
+  
   wmu <- spTransform(WMU, projection(sa))
   ab <- spTransform(AB.prov, projection(sa))
   hs <- spTransform(aprx.hs, projection(sa))
@@ -97,6 +111,7 @@
   allot <- spTransform(graze.allots, projection(sa))
   tsp <- spTransform(township, projection(sa))
   sec <- spTransform(section, projection(sa))
+  dem <- projectRaster(DEM, crs=saproj)   # this one takes awhile cuz it's big
   
   projection(rfma)  # Double check that it's in the right projection now
   
@@ -115,6 +130,7 @@
   
   # Plot layers together
   plot(ab, border="black")
+  plot(DEM)
   plot(wmu, border="gray47", add = T)
   plot(fc, col=c("lemonchiffon", "olivedrab4"), border= FALSE, add=T)
   plot(rfma, border="gray51", add=T)
@@ -126,6 +142,7 @@
   points(hs, pch = 17, col = "blue")
   points(locs12, pch = 8, col = "steelblue") # WHY can't I get this to plot over the study area
   plot(locs12, pch=8, col = "steelblue")  # Plots fine alone but not with other shapefiles
+  
 
   # Create 1000km2 grid across study area
   sa_rat <- raster(extent(sa), crs = projection(sa), res = 1000)  # is the res in 1000 m or km?
@@ -144,4 +161,11 @@
   # Create gridlines across raster based on min and max above
   sapply(xs, function(x) abline(v = xs))
   sapply(ys, function(x) abline(h = ys))  
+  
+  
+  #################################################################
+  ## Grid cells ##
+  r <- raster(ncol=40, nrow=30)
+  projection(r) <- "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+  
   
